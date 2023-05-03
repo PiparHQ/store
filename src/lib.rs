@@ -16,21 +16,47 @@ pub const fn tgas(n: u64) -> Gas {
 pub const CREATE_ACCOUNT: Gas = tgas(65 + 5);
 
 #[near_bindgen]
-#[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
+#[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize, Debug)]
 pub struct Product {
     product_id: String,
     name: String,
     ipfs: String,
+    price: u64,
     total_supply: u64,
-    timeout: String,
+    timeout: u8,
     is_discount: bool,
     discount_percent: u8,
     token_amount: u32,
     is_reward: bool,
     reward_amount: u32,
-    time_created: String,
+    time_created: u64,
     custom: bool,
     user: Option<String>,
+}
+
+#[near_bindgen]
+#[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
+pub struct Metadata {
+    success: bool,
+    product_id: String,
+    buyer_account_id: AccountId,
+    quantity: u64,
+    amount: u64,
+    store_contract_id: AccountId,
+}
+
+#[near_bindgen]
+impl Metadata {
+    fn new(success: bool, product_id: String, buyer_account_id: AccountId, quantity: u64, amount: u64, store_contract_id: AccountId,) -> Metadata {
+        Metadata {
+            success,
+            product_id,
+            buyer_account_id,
+            quantity,
+            amount,
+            store_contract_id,
+        }
+    }
 }
 
 #[near_bindgen]
@@ -50,6 +76,29 @@ impl Default for PiparStoreFactory {
 
 #[near_bindgen]
 impl PiparStoreFactory {
+
+    fn assert_only_owner(&self) {
+        assert_one_yocto();
+        assert_eq!(
+            env::signer_account_id(),
+            self.owner_id,
+            "Only contract owner can call this method"
+        );
+    }
+
+    fn assert_only_pipar(&self) {
+        assert_one_yocto();
+        assert_eq!(
+            env::predecessor_account_id(),
+            self.contract_id,
+            "Only pipar escrow contract can call this method"
+        );
+    }
+
+    pub fn get_store_products(&self) -> Vector<Product> {
+        self.products.into_iter().collect();
+    }
+
     pub fn get_token_cost(&self) -> U128 {
         self.token_cost.into()
     }
@@ -96,8 +145,9 @@ impl PiparStoreFactory {
         &mut self,
         name: String,
         ipfs: String,
+        price: u64,
         total_supply: u64,
-        timeout: String,
+        timeout: u8,
         is_discount: bool,
         discount_percent: u8,
         token_amount: u32,
@@ -106,21 +156,71 @@ impl PiparStoreFactory {
         custom: bool,
         user: Option<String>,
     ) {
-        // let mut value = {
-        //     product_id: Uuid::new_v4().to_string(),
-        //     &name,
-        //     &ipfs,
-        //     &total_supply: u64,
-        //     &timeout: String,
-        //     is_discount: bool,
-        //     discount_percent: u8,
-        //     token_amount: u32,
-        //     is_reward: bool,
-        //     reward_amount: u32,
-        //     time_created: String,
-        //     custom: bool,
-        //     user: Option<String>,
-        // };
+        self.assert_only_owner();
+        self.products.push(&Product {
+            product_id: Uuid::new_v4().to_string(),
+            name: name.parse().unwrap(),
+            ipfs: ipfs.parse().unwrap(),
+            price,
+            total_supply,
+            timeout,
+            is_discount,
+            discount_percent,
+            token_amount,
+            is_reward,
+            reward_amount,
+            time_created: env::block_timestamp(),
+            custom,
+            user
+        });
+    }
+
+    pub fn store_purchase_product(
+        &mut self,
+        product_id: String,
+        buyer_account_id: AccountId,
+        attached_near: u64
+    ) {
+        self.assert_only_pipar();
+
+        for (index, value) in self.products.iter().enumerate() {
+            if value.product_id == product_id {
+               let mut obj = self.products.get(index as u64).clone();
+                let buyer_id = buyer_account_id.clone();
+                assert!(
+                    &value.price >= &attached_near,
+                    "Attached attachedNear is not enough to buy the product"
+                );
+                let quantity = &attached_near / &value.price;
+                assert!(
+                    &value.total_supply >= &quantity,
+                    "Seller does not have enough product"
+                );
+                let new_supply = &value.total_supply - &quantity;
+
+                self.products.replace(index as u64, &Product {
+                    product_id: value.product_id,
+                    name: value.name,
+                    ipfs: value.ipfs,
+                    price: value.price,
+                    total_supply: new_supply,
+                    timeout: value.timeout,
+                    is_discount: value.is_discount,
+                    discount_percent: value.discount_percent,
+                    token_amount: value.token_amount,
+                    is_reward: value.is_reward,
+                    reward_amount: value.reward_amount,
+                    time_created: value.time_created,
+                    custom: value.custom,
+                    user: value.user
+                });
+                let metadata = &Metadata::new(true, obj.product_id, buyer_id, obj.quantity, obj.amount, obj.store_contract_id);
+                metadata
+            } else {
+                env::panic_str("Product not found.");
+            }
+        }
+
     }
 
 }
