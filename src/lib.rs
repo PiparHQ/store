@@ -1,7 +1,7 @@
 // use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 extern crate uuid;
-use near_sdk::{self, assert_one_yocto, collections::{LookupSet, LookupMap, Vector}, borsh::{self, BorshDeserialize, BorshSerialize}, PublicKey};
-use near_sdk::{env, log, near_bindgen, AccountId, Gas, Promise, PromiseError, PanicOnDefault, json_types::U128, is_promise_success, Balance};
+use near_sdk::{self, assert_one_yocto, collections::{Vector}, borsh::{self, BorshDeserialize, BorshSerialize},};
+use near_sdk::{env, near_bindgen, AccountId, Gas, Promise, json_types::U128, is_promise_success, Balance};
 use serde::{Serialize, Deserialize};
 use serde_json;
 use uuid::Uuid;
@@ -18,7 +18,7 @@ pub const fn tgas(n: u64) -> Gas {
 pub const CREATE_ACCOUNT: Gas = tgas(65 + 5);
 
 #[near_bindgen]
-#[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize, fmt::Debug, Clone)]
+#[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize, fmt::Debug)]
 pub struct Product {
     product_id: String,
     name: String,
@@ -220,51 +220,52 @@ impl PiparStoreFactory {
     pub fn store_purchase_product(
         &mut self,
         product_id: String,
-        buyer_account_id: AccountId,
         attached_near: u64
     ) {
         self.assert_only_pipar();
 
-        let mut products = &self.products;
+        let product_index = self.products
+            .iter()
+            .position(|p| p.product_id == product_id)
+            .unwrap();
 
-        for Product in products.iter() {
-            if Product.product_id == product_id {
-                let buyer_id = buyer_account_id.clone();
+        match self.products.get(product_index as u64) {
+            Some(product) => {
                 assert!(
-                    &Product.price >= &attached_near,
+                    &product.price >= &attached_near,
                     "Attached attachedNear is not enough to buy the product"
                 );
-                let quantity = &attached_near / &Product.price;
+                let quantity = attached_near / &product.price;
                 assert!(
-                    &Product.total_supply >= &quantity,
+                    &product.total_supply >= &quantity,
                     "Seller does not have enough product"
                 );
-                let new_supply = &Product.total_supply - &quantity;
+                let new_supply = &product.total_supply - &quantity;
+
+                // let buyer_id = buyer_account_id.clone();
 
                 {
-                    self.products.replace(index as u64, &Product {
-                        product_id: Product.product_id,
-                        name: Product.name,
-                        ipfs: Product.ipfs,
-                        price: Product.price,
+                    self.products.replace(product_index as u64, &Product {
+                        product_id: product.product_id,
+                        name: product.name,
+                        ipfs: product.ipfs,
+                        price: product.price,
                         total_supply: new_supply,
-                        timeout: Product.timeout,
-                        is_discount: Product.is_discount,
-                        discount_percent: Product.discount_percent,
-                        token_amount: Product.token_amount,
-                        is_reward: Product.is_reward,
-                        reward_amount: Product.reward_amount,
-                        time_created: Product.time_created,
-                        custom: Product.custom,
-                        user: Product.user
+                        timeout: product.timeout,
+                        is_discount: product.is_discount,
+                        discount_percent: product.discount_percent,
+                        token_amount: product.token_amount,
+                        is_reward: product.is_reward,
+                        reward_amount: product.reward_amount,
+                        time_created: product.time_created,
+                        custom: product.custom,
+                        user: product.user
                     });
                 }
-                // println!("{:?} {:?} {:?} {:?} {:?} {:?}", true, &value.product_id, &buyer_id, &quantity, &attached_near, env::current_account_id());
-            } else {
-                env::panic_str("_Product not found.")
-            }
+                println!("{:?}", self.products.get(product_index as u64));
+            },
+            None => panic!("Couldn't find product"),
         }
-
     }
 
     pub fn plus_product(
@@ -274,31 +275,36 @@ impl PiparStoreFactory {
     ) {
         self.assert_only_pipar();
 
-        for (index, value) in self.products.iter().enumerate() {
-            if value.product_id == product_id {
-                let obj = self.products.get(index as u64).clone();
-                let new_supply = &value.total_supply + &quantity;
+        let product_index = self.products
+            .iter()
+            .position(|p| p.product_id == product_id)
+            .unwrap();
 
-                self.products.replace(index as u64, &Product {
-                    product_id: value.product_id,
-                    name: value.name,
-                    ipfs: value.ipfs,
-                    price: value.price,
-                    total_supply: new_supply,
-                    timeout: value.timeout,
-                    is_discount: value.is_discount,
-                    discount_percent: value.discount_percent,
-                    token_amount: value.token_amount,
-                    is_reward: value.is_reward,
-                    reward_amount: value.reward_amount,
-                    time_created: value.time_created,
-                    custom: value.custom,
-                    user: value.user
-                });
-                println!("{:?}", &obj);
-            } else {
-                env::panic_str("Product not found.")
-            }
+        match self.products.get(product_index as u64) {
+            Some(product) => {
+                let new_supply = &product.total_supply + &quantity;
+
+                {
+                    self.products.replace(product_index as u64, &Product {
+                        product_id: product.product_id,
+                        name: product.name,
+                        ipfs: product.ipfs,
+                        price: product.price,
+                        total_supply: new_supply,
+                        timeout: product.timeout,
+                        is_discount: product.is_discount,
+                        discount_percent: product.discount_percent,
+                        token_amount: product.token_amount,
+                        is_reward: product.is_reward,
+                        reward_amount: product.reward_amount,
+                        time_created: product.time_created,
+                        custom: product.custom,
+                        user: product.user
+                    });
+                }
+                // println!("{:?} {:?} {:?} {:?}", true, &product.product_id, &quantity, env::current_account_id());
+            },
+            None => panic!("Couldn't find product"),
         }
 
     }
