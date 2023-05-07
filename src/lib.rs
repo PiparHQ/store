@@ -1,7 +1,6 @@
-// use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 extern crate uuid;
 use near_sdk::{self, assert_one_yocto, collections::{Vector}, borsh::{self, BorshDeserialize, BorshSerialize},};
-use near_sdk::{env, near_bindgen, AccountId, Gas, Promise, json_types::U128, is_promise_success, Balance};
+use near_sdk::{ext_contract, env, near_bindgen, AccountId, Gas, Promise, json_types::U128, is_promise_success, Balance};
 use serde::{Serialize, Deserialize};
 use serde_json;
 use uuid::Uuid;
@@ -9,8 +8,9 @@ use std::fmt;
 
 // Constants
 pub const ONE_NEAR: u128 = 1_000_000_000_000_000_000_000_000;
-pub const TOKEN_BALANCE: u128 = 5_000_000_000_000_000_000_000_000;
+pub const TOKEN_BALANCE: u128 = 4_000_000_000_000_000_000_000_000;
 pub const NO_DEPOSIT: Balance = 0;
+pub const ONE_YOCTO: Balance = 1;
 
 pub const fn tgas(n: u64) -> Gas {
     Gas(n * 10u64.pow(12))
@@ -23,12 +23,12 @@ pub struct Product {
     product_id: String,
     name: String,
     ipfs: String,
-    price: u64,
-    total_supply: u64,
+    price: u128,
+    total_supply: u128,
     timeout: u8,
     is_discount: bool,
     discount_percent: u8,
-    token_amount: u32,
+    token_amount: u128,
     is_reward: bool,
     reward_amount: u32,
     time_created: u64,
@@ -44,6 +44,20 @@ pub struct FtData {
     name: String,
     symbol: String,
     icon: String,
+}
+
+#[near_bindgen]
+#[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
+pub struct StorageData {
+    account_id: AccountId,
+    registration_only: bool,
+}
+
+#[near_bindgen]
+#[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
+pub struct TokenData {
+    receiver_id: AccountId,
+    registration_only: bool,
 }
 
 #[near_bindgen]
@@ -187,20 +201,21 @@ impl PiparStoreFactory {
         &mut self,
         name: String,
         ipfs: String,
-        price: u64,
-        total_supply: u64,
+        price: u128,
+        total_supply: u128,
         timeout: u8,
         is_discount: bool,
         discount_percent: u8,
-        token_amount: u32,
+        token_amount: u128,
         is_reward: bool,
         reward_amount: u32,
         custom: bool,
         user: Option<String>,
     ) {
         self.assert_only_owner();
+        let id = Uuid::new_v4().to_string();
         self.products.push(&Product {
-            product_id: Uuid::new_v4().to_string(),
+            product_id: id,
             name: name.parse().unwrap(),
             ipfs: ipfs.parse().unwrap(),
             price,
@@ -220,7 +235,8 @@ impl PiparStoreFactory {
     pub fn store_purchase_product(
         &mut self,
         product_id: String,
-        attached_near: u64
+        buyer_account_id: AccountId,
+        attached_near: Balance,
     ) {
         self.assert_only_pipar();
 
@@ -262,7 +278,7 @@ impl PiparStoreFactory {
                         user: product.user
                     });
                 }
-                println!("{:?}", self.products.get(product_index as u64));
+                println!("{:?}", self.products.get(product_index as u64))
             },
             None => panic!("Couldn't find product"),
         }
@@ -302,7 +318,55 @@ impl PiparStoreFactory {
                         user: product.user
                     });
                 }
-                // println!("{:?} {:?} {:?} {:?}", true, &product.product_id, &quantity, env::current_account_id());
+                println!("{:?}", self.products.get(product_index as u64))
+            },
+            None => panic!("Couldn't find product"),
+        }
+
+    }
+
+    pub fn reward_with_token(
+        &mut self,
+        product_id: String,
+        quantity: u128,
+        buyer_account_id: AccountId,
+    ) -> Promise {
+        self.assert_only_pipar();
+
+        let product_index = self.products
+            .iter()
+            .position(|p| p.product_id == product_id)
+            .unwrap();
+
+        match self.products.get(product_index as u64) {
+            Some(product) => {
+                let token_quantity = &product.reward_amount * &quantity;
+                let memo = format!("Thank You for Shopping at {}!", env::current_account_id());
+                let current_account = env::current_account_id().to_string();
+                let token_account: AccountId = format!("ft.{current_account}").parse().unwrap();
+
+                let storage_args = serde_json::to_vec(&StorageData {
+                    account_id: buyer_account_id.clone(),
+                    registration_only: false,
+                })
+                    .unwrap();
+
+                let token_args = serde_json::to_vec(&TokenData {
+                    account_id: buyer_account_id.clone(),
+                    registration_only: false,
+                })
+                    .unwrap();
+
+                Promise::new(token_account.clone())
+                    .function_call("storage_deposit".to_owned(), storage_args, ONE_YOCTO, CREATE_ACCOUNT)
+                    .function_call("ft_transfer".to_owned(), token_args, NO_DEPOSIT, CREATE_ACCOUNT)
+                    .then(
+                        Self::ext(env::current_account_id())
+                            .deploy_token_callback(
+                                env::predecessor_account_id(),
+                                env::attached_deposit().into(),
+                            )
+                    )
             },
             None => panic!("Couldn't find product"),
         }
