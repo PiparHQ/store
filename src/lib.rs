@@ -10,7 +10,7 @@ use std::fmt;
 pub const ONE_NEAR: u128 = 1_000_000_000_000_000_000_000_000;
 pub const TOKEN_BALANCE: u128 = 4_000_000_000_000_000_000_000_000;
 pub const NO_DEPOSIT: Balance = 0;
-pub const ONE_YOCTO: Balance = 1;
+pub const ONE_YOCTO: u128 = 10_000_000_000_000_000_000_000;
 
 pub const fn tgas(n: u64) -> Gas {
     Gas(n * 10u64.pow(12))
@@ -57,7 +57,8 @@ pub struct StorageData {
 #[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
 pub struct TokenData {
     receiver_id: AccountId,
-    registration_only: bool,
+    amount: u128,
+    memo: String,
 }
 
 #[near_bindgen]
@@ -113,10 +114,14 @@ impl PiparStoreFactory {
         )
     }
 
+    pub fn get_product_count(&self) -> usize {
+        self.products.count()
+    }
+
     pub fn get_store_products(&self) {
-        for (index, product) in self.products.iter().enumerate() {
-            println!("Element at index {:?}: {:?}", index, product)
-        }
+        let num: usize = self.products.iter().count();
+        let products = self.products.iter().take(num);
+        println!("{:?}", products)
     }
 
     pub fn get_token_cost(&self) -> U128 {
@@ -287,7 +292,7 @@ impl PiparStoreFactory {
     pub fn plus_product(
         &mut self,
         product_id: String,
-        quantity: u64,
+        quantity: u128,
     ) {
         self.assert_only_pipar();
 
@@ -352,8 +357,9 @@ impl PiparStoreFactory {
                     .unwrap();
 
                 let token_args = serde_json::to_vec(&TokenData {
-                    account_id: buyer_account_id.clone(),
-                    registration_only: false,
+                    receiver_id: buyer_account_id.clone(),
+                    amount: token_quantity,
+                    memo,
                 })
                     .unwrap();
 
@@ -362,7 +368,7 @@ impl PiparStoreFactory {
                     .function_call("ft_transfer".to_owned(), token_args, NO_DEPOSIT, CREATE_ACCOUNT)
                     .then(
                         Self::ext(env::current_account_id())
-                            .deploy_token_callback(
+                            .reward_with_token_callback(
                                 env::predecessor_account_id(),
                                 env::attached_deposit().into(),
                             )
@@ -370,7 +376,17 @@ impl PiparStoreFactory {
             },
             None => panic!("Couldn't find product"),
         }
+    }
 
+    #[private]
+    pub fn reward_with_token_callback(
+        &self,
+    ) {
+        if is_promise_success() {
+            env::log_str("Sent token successfully")
+        } else {
+            env::log_str("failed sending token")
+        }
     }
 
 }
