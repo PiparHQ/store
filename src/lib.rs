@@ -18,7 +18,7 @@ pub const fn tgas(n: u64) -> Gas {
 pub const CREATE_ACCOUNT: Gas = tgas(65 + 5);
 
 #[near_bindgen]
-#[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize, fmt::Debug)]
+#[derive(Debug, Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
 pub struct Product {
     product_id: String,
     name: String,
@@ -30,7 +30,7 @@ pub struct Product {
     discount_percent: u8,
     token_amount: u128,
     is_reward: bool,
-    reward_amount: u32,
+    reward_amount: u128,
     time_created: u64,
     custom: bool,
     user: Option<String>,
@@ -115,13 +115,16 @@ impl PiparStoreFactory {
     }
 
     pub fn get_product_count(&self) -> usize {
-        self.products.count()
+        self.products.iter().count()
     }
 
     pub fn get_store_products(&self) {
-        let num: usize = self.products.iter().count();
-        let products = self.products.iter().take(num);
-        println!("{:?}", products)
+        // let num: usize = self.products.iter().count();
+        // let products= self.products.iter().take(num);
+        // println!("{:?}", products)
+        for p in self.products.iter() {
+            println!("{:?}", p)
+        }
     }
 
     pub fn get_token_cost(&self) -> U128 {
@@ -213,7 +216,7 @@ impl PiparStoreFactory {
         discount_percent: u8,
         token_amount: u128,
         is_reward: bool,
-        reward_amount: u32,
+        reward_amount: u128,
         custom: bool,
         user: Option<String>,
     ) {
@@ -369,8 +372,7 @@ impl PiparStoreFactory {
                     .then(
                         Self::ext(env::current_account_id())
                             .reward_with_token_callback(
-                                env::predecessor_account_id(),
-                                env::attached_deposit().into(),
+                                token_quantity.clone(),
                             )
                     )
             },
@@ -381,11 +383,12 @@ impl PiparStoreFactory {
     #[private]
     pub fn reward_with_token_callback(
         &self,
+        token_quantity: u128,
     ) {
         if is_promise_success() {
-            env::log_str("Sent token successfully")
+            println!("Sent {:?} token successfully", token_quantity)
         } else {
-            env::log_str("failed sending token")
+            println!("failed sending token")
         }
     }
 
