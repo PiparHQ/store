@@ -1,10 +1,16 @@
 extern crate uuid;
-use near_sdk::{self, assert_one_yocto, collections::{Vector}, borsh::{self, BorshDeserialize, BorshSerialize},};
-use near_sdk::{ext_contract, env, near_bindgen, AccountId, Gas, Promise, json_types::U128, is_promise_success, Balance};
-use serde::{Serialize, Deserialize};
+use near_sdk::{
+    self, assert_one_yocto,
+    borsh::{self, BorshDeserialize, BorshSerialize},
+    collections::Vector,
+};
+use near_sdk::{
+    env, is_promise_success, json_types::U128, near_bindgen, AccountId, Balance, Gas,
+    Promise,
+};
+use serde::{Deserialize, Serialize};
 use serde_json;
 use uuid::Uuid;
-use std::fmt;
 
 // Constants
 pub const ONE_NEAR: u128 = 1_000_000_000_000_000_000_000_000;
@@ -68,7 +74,7 @@ pub struct PiparStoreFactory {
     pub owner_id: AccountId,
     pub contract_id: AccountId,
     pub token: bool,
-    pub token_cost: u128
+    pub token_cost: u128,
 }
 
 impl Default for PiparStoreFactory {
@@ -79,7 +85,6 @@ impl Default for PiparStoreFactory {
 
 #[near_bindgen]
 impl PiparStoreFactory {
-
     fn assert_only_owner(&self) {
         assert_one_yocto();
         assert_eq!(
@@ -108,8 +113,7 @@ impl PiparStoreFactory {
 
     fn assert_token_false(&self) {
         assert_eq!(
-            false,
-            self.token,
+            false, self.token,
             "Store owner has already deployed a token"
         )
     }
@@ -144,7 +148,7 @@ impl PiparStoreFactory {
             owner_id,
             contract_id,
             token: false,
-            token_cost: TOKEN_BALANCE
+            token_cost: TOKEN_BALANCE,
         }
     }
 
@@ -156,23 +160,24 @@ impl PiparStoreFactory {
     }
 
     #[private]
-    pub fn deploy_token_callback(
-        &mut self,
-        token_creator_id: AccountId,
-        attached_deposit: U128,
-    ) {
+    pub fn deploy_token_callback(&mut self, token_creator_id: AccountId, attached_deposit: U128) {
         let attached_deposit: u128 = attached_deposit.into();
         if is_promise_success() {
             env::log_str("Successful token deployment")
         } else {
-            Promise::new(token_creator_id)
-                .transfer(attached_deposit);
+            Promise::new(token_creator_id).transfer(attached_deposit);
             env::log_str("failed token deployment")
         }
     }
 
     #[payable]
-    pub fn deploy_token(&mut self, total_supply: String, name: String, symbol: String, icon: String) -> Promise {
+    pub fn deploy_token(
+        &mut self,
+        total_supply: String,
+        name: String,
+        symbol: String,
+        icon: String,
+    ) -> Promise {
         self.assert_token_false();
         self.assert_enough_deposit();
         let current_account = env::current_account_id().to_string();
@@ -186,23 +191,25 @@ impl PiparStoreFactory {
             total_supply,
             name,
             symbol,
-            icon
+            icon,
         })
-            .unwrap();
+        .unwrap();
 
         Promise::new(subaccount.clone())
             .create_account()
             .add_full_access_key(env::signer_account_pk())
             .transfer(TOKEN_BALANCE)
             .deploy_contract(include_bytes!("../wasm/pipar_fungible_token.wasm").to_vec())
-            .function_call("new_default_meta".to_owned(), init_args, NO_DEPOSIT, CREATE_ACCOUNT)
-            .then(
-                Self::ext(env::current_account_id())
-                    .deploy_token_callback(
-                        env::predecessor_account_id(),
-                        env::attached_deposit().into(),
-                    )
+            .function_call(
+                "new_default_meta".to_owned(),
+                init_args,
+                NO_DEPOSIT,
+                CREATE_ACCOUNT,
             )
+            .then(Self::ext(env::current_account_id()).deploy_token_callback(
+                env::predecessor_account_id(),
+                env::attached_deposit().into(),
+            ))
     }
 
     pub fn add_product(
@@ -236,7 +243,7 @@ impl PiparStoreFactory {
             reward_amount,
             time_created: env::block_timestamp(),
             custom,
-            user
+            user,
         })
     }
 
@@ -248,7 +255,8 @@ impl PiparStoreFactory {
     ) {
         self.assert_only_pipar();
 
-        let product_index = self.products
+        let product_index = self
+            .products
             .iter()
             .position(|p| p.product_id == product_id)
             .unwrap();
@@ -269,37 +277,37 @@ impl PiparStoreFactory {
                 // let buyer_id = buyer_account_id.clone();
 
                 {
-                    self.products.replace(product_index as u64, &Product {
-                        product_id: product.product_id,
-                        name: product.name,
-                        ipfs: product.ipfs,
-                        price: product.price,
-                        total_supply: new_supply,
-                        timeout: product.timeout,
-                        is_discount: product.is_discount,
-                        discount_percent: product.discount_percent,
-                        token_amount: product.token_amount,
-                        is_reward: product.is_reward,
-                        reward_amount: product.reward_amount,
-                        time_created: product.time_created,
-                        custom: product.custom,
-                        user: product.user
-                    });
+                    self.products.replace(
+                        product_index as u64,
+                        &Product {
+                            product_id: product.product_id,
+                            name: product.name,
+                            ipfs: product.ipfs,
+                            price: product.price,
+                            total_supply: new_supply,
+                            timeout: product.timeout,
+                            is_discount: product.is_discount,
+                            discount_percent: product.discount_percent,
+                            token_amount: product.token_amount,
+                            is_reward: product.is_reward,
+                            reward_amount: product.reward_amount,
+                            time_created: product.time_created,
+                            custom: product.custom,
+                            user: product.user,
+                        },
+                    );
                 }
                 println!("{:?}", self.products.get(product_index as u64))
-            },
+            }
             None => panic!("Couldn't find product"),
         }
     }
 
-    pub fn plus_product(
-        &mut self,
-        product_id: String,
-        quantity: u128,
-    ) {
+    pub fn plus_product(&mut self, product_id: String, quantity: u128) {
         self.assert_only_pipar();
 
-        let product_index = self.products
+        let product_index = self
+            .products
             .iter()
             .position(|p| p.product_id == product_id)
             .unwrap();
@@ -309,28 +317,30 @@ impl PiparStoreFactory {
                 let new_supply = &product.total_supply + &quantity;
 
                 {
-                    self.products.replace(product_index as u64, &Product {
-                        product_id: product.product_id,
-                        name: product.name,
-                        ipfs: product.ipfs,
-                        price: product.price,
-                        total_supply: new_supply,
-                        timeout: product.timeout,
-                        is_discount: product.is_discount,
-                        discount_percent: product.discount_percent,
-                        token_amount: product.token_amount,
-                        is_reward: product.is_reward,
-                        reward_amount: product.reward_amount,
-                        time_created: product.time_created,
-                        custom: product.custom,
-                        user: product.user
-                    });
+                    self.products.replace(
+                        product_index as u64,
+                        &Product {
+                            product_id: product.product_id,
+                            name: product.name,
+                            ipfs: product.ipfs,
+                            price: product.price,
+                            total_supply: new_supply,
+                            timeout: product.timeout,
+                            is_discount: product.is_discount,
+                            discount_percent: product.discount_percent,
+                            token_amount: product.token_amount,
+                            is_reward: product.is_reward,
+                            reward_amount: product.reward_amount,
+                            time_created: product.time_created,
+                            custom: product.custom,
+                            user: product.user,
+                        },
+                    );
                 }
                 println!("{:?}", self.products.get(product_index as u64))
-            },
+            }
             None => panic!("Couldn't find product"),
         }
-
     }
 
     pub fn reward_with_token(
@@ -341,7 +351,8 @@ impl PiparStoreFactory {
     ) -> Promise {
         self.assert_only_pipar();
 
-        let product_index = self.products
+        let product_index = self
+            .products
             .iter()
             .position(|p| p.product_id == product_id)
             .unwrap();
@@ -357,41 +368,43 @@ impl PiparStoreFactory {
                     account_id: buyer_account_id.clone(),
                     registration_only: false,
                 })
-                    .unwrap();
+                .unwrap();
 
                 let token_args = serde_json::to_vec(&TokenData {
                     receiver_id: buyer_account_id.clone(),
                     amount: token_quantity,
                     memo,
                 })
-                    .unwrap();
+                .unwrap();
 
                 Promise::new(token_account.clone())
-                    .function_call("storage_deposit".to_owned(), storage_args, ONE_YOCTO, CREATE_ACCOUNT)
-                    .function_call("ft_transfer".to_owned(), token_args, NO_DEPOSIT, CREATE_ACCOUNT)
+                    .function_call(
+                        "storage_deposit".to_owned(),
+                        storage_args,
+                        ONE_YOCTO,
+                        CREATE_ACCOUNT,
+                    )
+                    .function_call(
+                        "ft_transfer".to_owned(),
+                        token_args,
+                        NO_DEPOSIT,
+                        CREATE_ACCOUNT,
+                    )
                     .then(
                         Self::ext(env::current_account_id())
-                            .reward_with_token_callback(
-                                token_quantity.clone(),
-                            )
+                            .reward_with_token_callback(token_quantity.clone()),
                     )
-            },
+            }
             None => panic!("Couldn't find product"),
         }
     }
 
     #[private]
-    pub fn reward_with_token_callback(
-        &self,
-        token_quantity: u128,
-    ) {
+    pub fn reward_with_token_callback(&self, token_quantity: u128) {
         if is_promise_success() {
             println!("Sent {:?} token successfully", token_quantity)
         } else {
             println!("failed sending token")
         }
     }
-
 }
-
-
