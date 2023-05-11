@@ -5,7 +5,7 @@ use near_sdk::{
     collections::Vector,
 };
 use near_sdk::{
-    env, is_promise_success, json_types::U128, near_bindgen, AccountId, Balance, Gas,
+    env, is_promise_success, json_types::U128, near_bindgen, PanicOnDefault, AccountId, Balance, Gas,
     Promise,
 };
 use serde::{Deserialize, Serialize};
@@ -23,7 +23,6 @@ pub const fn tgas(n: u64) -> Gas {
 }
 pub const CREATE_ACCOUNT: Gas = tgas(65 + 5);
 
-#[near_bindgen]
 #[derive(Debug, Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
 pub struct Product {
     product_id: String,
@@ -42,7 +41,6 @@ pub struct Product {
     user: Option<String>,
 }
 
-#[near_bindgen]
 #[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
 pub struct FtData {
     owner_id: AccountId,
@@ -52,14 +50,12 @@ pub struct FtData {
     icon: String,
 }
 
-#[near_bindgen]
 #[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
 pub struct StorageData {
     account_id: AccountId,
     registration_only: bool,
 }
 
-#[near_bindgen]
 #[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
 pub struct TokenData {
     receiver_id: AccountId,
@@ -68,19 +64,13 @@ pub struct TokenData {
 }
 
 #[near_bindgen]
-#[derive(BorshDeserialize, BorshSerialize)]
+#[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct PiparStoreFactory {
     pub products: Vector<Product>,
     pub owner_id: AccountId,
     pub contract_id: AccountId,
     pub token: bool,
     pub token_cost: u128,
-}
-
-impl Default for PiparStoreFactory {
-    fn default() -> Self {
-        env::panic_str("Not initialized yet.")
-    }
 }
 
 #[near_bindgen]
@@ -139,8 +129,7 @@ impl PiparStoreFactory {
         self.token.into()
     }
 
-    /// Initialization
-    #[init(ignore_state)]
+    #[init]
     pub fn new(owner_id: AccountId, contract_id: AccountId) -> Self {
         assert!(!env::state_exists(), "Already initialized");
         Self {
