@@ -1,4 +1,3 @@
-extern crate uuid;
 use near_sdk::{
     self, assert_one_yocto,
     borsh::{self, BorshDeserialize, BorshSerialize},
@@ -8,9 +7,8 @@ use near_sdk::{
     env, is_promise_success, json_types::U128, near_bindgen, PanicOnDefault, AccountId, Balance, Gas,
     Promise,
 };
-use serde::{Deserialize, Serialize};
-use serde_json;
-use uuid::Uuid;
+use near_sdk::serde::{Deserialize, Serialize};
+use near_sdk::serde_json::{json};
 
 // Constants
 pub const ONE_NEAR: u128 = 1_000_000_000_000_000_000_000_000;
@@ -21,11 +19,22 @@ pub const ONE_YOCTO: u128 = 10_000_000_000_000_000_000_000;
 pub const fn tgas(n: u64) -> Gas {
     Gas(n * 10u64.pow(12))
 }
+
+pub(crate) fn yocto_to_near(yocto: u128) -> f64 {
+    //10^20 yoctoNEAR (1 NEAR would be 10_000). This is to give a precision of 4 decimal places.
+    let formatted_near = yocto / 100_000_000_000_000_000_000;
+    let near = formatted_near as f64 / 10_000_f64;
+
+    near
+}
+
 pub const CREATE_ACCOUNT: Gas = tgas(65 + 5);
 
+#[near_bindgen]
 #[derive(Debug, Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
+#[serde(crate = "near_sdk::serde")]
 pub struct Product {
-    product_id: String,
+    product_id: u64,
     name: String,
     ipfs: String,
     price: u128,
@@ -41,7 +50,9 @@ pub struct Product {
     user: Option<String>,
 }
 
+#[near_bindgen]
 #[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
+#[serde(crate = "near_sdk::serde")]
 pub struct FtData {
     owner_id: AccountId,
     total_supply: String,
@@ -50,13 +61,17 @@ pub struct FtData {
     icon: String,
 }
 
+#[near_bindgen]
 #[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
+#[serde(crate = "near_sdk::serde")]
 pub struct StorageData {
     account_id: AccountId,
     registration_only: bool,
 }
 
+#[near_bindgen]
 #[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
+#[serde(crate = "near_sdk::serde")]
 pub struct TokenData {
     receiver_id: AccountId,
     amount: u128,
@@ -142,13 +157,6 @@ impl PiparStoreFactory {
     }
 
     #[private]
-    #[init(ignore_state)]
-    pub fn migrate() -> Self {
-        let old = env::state_read().expect("migrating state");
-        Self { ..old }
-    }
-
-    #[private]
     pub fn deploy_token_callback(&mut self, token_creator_id: AccountId, attached_deposit: U128) {
         let attached_deposit: u128 = attached_deposit.into();
         if is_promise_success() {
@@ -217,7 +225,7 @@ impl PiparStoreFactory {
         user: Option<String>,
     ) {
         self.assert_only_owner();
-        let id = Uuid::new_v4().to_string();
+        let id = env::block_timestamp_ms();
         self.products.push(&Product {
             product_id: id,
             name: name.parse().unwrap(),
@@ -238,7 +246,7 @@ impl PiparStoreFactory {
 
     pub fn store_purchase_product(
         &mut self,
-        product_id: String,
+        product_id: u64,
         buyer_account_id: AccountId,
         attached_near: Balance,
     ) {
@@ -292,7 +300,7 @@ impl PiparStoreFactory {
         }
     }
 
-    pub fn plus_product(&mut self, product_id: String, quantity: u128) {
+    pub fn plus_product(&mut self, product_id: u64, quantity: u128) {
         self.assert_only_pipar();
 
         let product_index = self
@@ -334,7 +342,7 @@ impl PiparStoreFactory {
 
     pub fn reward_with_token(
         &mut self,
-        product_id: String,
+        product_id: u64,
         quantity: u128,
         buyer_account_id: AccountId,
     ) -> Promise {
