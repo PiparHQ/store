@@ -20,13 +20,13 @@ pub const fn tgas(n: u64) -> Gas {
     Gas(n * 10u64.pow(12))
 }
 
-pub(crate) fn yocto_to_near(yocto: u128) -> f64 {
-    //10^20 yoctoNEAR (1 NEAR would be 10_000). This is to give a precision of 4 decimal places.
-    let formatted_near = yocto / 100_000_000_000_000_000_000;
-    let near = formatted_near as f64 / 10_000_f64;
-
-    near
-}
+// pub(crate) fn yocto_to_near(yocto: u128) -> f64 {
+//     //10^20 yoctoNEAR (1 NEAR would be 10_000). This is to give a precision of 4 decimal places.
+//     let formatted_near = yocto / 100_000_000_000_000_000_000;
+//     let near = formatted_near as f64 / 10_000_f64;
+//
+//     near
+// }
 
 pub const CREATE_ACCOUNT: Gas = tgas(65 + 5);
 
@@ -76,6 +76,15 @@ pub struct TokenData {
     receiver_id: AccountId,
     amount: u128,
     memo: String,
+}
+
+#[near_bindgen]
+#[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct PurchaseData {
+    product_id: u64,
+    buyer_account_id: AccountId,
+    attached_near: Balance,
 }
 
 #[near_bindgen]
@@ -149,8 +158,8 @@ impl PiparStoreFactory {
         assert!(!env::state_exists(), "Already initialized");
         Self {
             products: Vector::new(b"vec-uid-1".to_vec()),
-            owner_id,
-            contract_id,
+            owner_id: owner_id,
+            contract_id: contract_id,
             token: false,
             token_cost: TOKEN_BALANCE,
         }
@@ -176,7 +185,7 @@ impl PiparStoreFactory {
         icon: String,
     ) -> Promise {
         self.assert_token_false();
-        self.assert_enough_deposit();
+        // self.assert_enough_deposit();
         let current_account = env::current_account_id().to_string();
         let subaccount: AccountId = format!("ft.{current_account}").parse().unwrap();
         assert!(
@@ -185,10 +194,10 @@ impl PiparStoreFactory {
         );
         let init_args = serde_json::to_vec(&FtData {
             owner_id: subaccount.clone(),
-            total_supply,
-            name,
-            symbol,
-            icon,
+            total_supply: total_supply,
+            name: name,
+            symbol: symbol,
+            icon: icon,
         })
         .unwrap();
 
@@ -230,17 +239,17 @@ impl PiparStoreFactory {
             product_id: id,
             name: name.parse().unwrap(),
             ipfs: ipfs.parse().unwrap(),
-            price,
-            total_supply,
-            timeout,
-            is_discount,
-            discount_percent,
-            token_amount,
-            is_reward,
-            reward_amount,
+            price: price,
+            total_supply: total_supply,
+            timeout: timeout,
+            is_discount: is_discount,
+            discount_percent: discount_percent,
+            token_amount: token_amount,
+            is_reward: is_reward,
+            reward_amount: reward_amount,
             time_created: env::block_timestamp(),
-            custom,
-            user,
+            custom: custom,
+            user: user,
         })
     }
 
@@ -249,7 +258,7 @@ impl PiparStoreFactory {
         product_id: u64,
         buyer_account_id: AccountId,
         attached_near: Balance,
-    ) {
+    ) -> Vec<u8> {
         self.assert_only_pipar();
 
         let product_index = self
@@ -270,8 +279,6 @@ impl PiparStoreFactory {
                     "Seller does not have enough product"
                 );
                 let new_supply = &product.total_supply - &quantity;
-
-                // let buyer_id = buyer_account_id.clone();
 
                 {
                     self.products.replace(
@@ -298,6 +305,13 @@ impl PiparStoreFactory {
             }
             None => panic!("Couldn't find product"),
         }
+        let res = serde_json::to_vec(&PurchaseData {
+            product_id: product_id.clone(),
+            buyer_account_id: buyer_account_id.clone(),
+            attached_near: attached_near.clone(),
+        })
+            .unwrap();
+        res
     }
 
     pub fn plus_product(&mut self, product_id: u64, quantity: u128) {
@@ -370,7 +384,7 @@ impl PiparStoreFactory {
                 let token_args = serde_json::to_vec(&TokenData {
                     receiver_id: buyer_account_id.clone(),
                     amount: token_quantity,
-                    memo,
+                    memo: memo,
                 })
                 .unwrap();
 
