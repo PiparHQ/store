@@ -20,34 +20,26 @@ pub const fn tgas(n: u64) -> Gas {
     Gas(n * 10u64.pow(12))
 }
 
-// pub(crate) fn yocto_to_near(yocto: u128) -> f64 {
-//     //10^20 yoctoNEAR (1 NEAR would be 10_000). This is to give a precision of 4 decimal places.
-//     let formatted_near = yocto / 100_000_000_000_000_000_000;
-//     let near = formatted_near as f64 / 10_000_f64;
-//
-//     near
-// }
-
 pub const CREATE_ACCOUNT: Gas = tgas(65 + 5);
 
 #[near_bindgen]
-#[derive(Debug, Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
+#[derive(PanicOnDefault, BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, Debug)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Product {
-    product_id: u64,
-    name: String,
-    ipfs: String,
-    price: u128,
-    total_supply: u128,
-    timeout: u8,
-    is_discount: bool,
-    discount_percent: u8,
-    token_amount: u128,
-    is_reward: bool,
-    reward_amount: u128,
-    time_created: u64,
-    custom: bool,
-    user: Option<String>,
+    pub product_id: u64,
+    pub name: String,
+    pub ipfs: String,
+    pub price: U128,
+    pub total_supply: U128,
+    pub timeout: u64,
+    pub is_discount: bool,
+    pub discount_percent: u64,
+    pub token_amount: U128,
+    pub is_reward: bool,
+    pub reward_amount: U128,
+    pub time_created: u64,
+    pub custom: bool,
+    pub user: String
 }
 
 #[near_bindgen]
@@ -136,13 +128,10 @@ impl PiparStoreFactory {
         self.products.iter().count()
     }
 
-    pub fn get_store_products(&self) {
-        // let num: usize = self.products.iter().count();
-        // let products= self.products.iter().take(num);
-        // println!("{:?}", products)
-        for p in self.products.iter() {
-            println!("{:?}", p)
-        }
+    pub fn get_store_products(&self) -> Vec<Product> {
+        let products: Vec<Product> = self.products.iter().map(|x| x).collect();
+
+        products
     }
 
     pub fn get_token_cost(&self) -> U128 {
@@ -154,6 +143,7 @@ impl PiparStoreFactory {
     }
 
     #[init]
+    #[private]
     pub fn new(owner_id: AccountId, contract_id: AccountId) -> Self {
         assert!(!env::state_exists(), "Already initialized");
         Self {
@@ -185,7 +175,6 @@ impl PiparStoreFactory {
         icon: String,
     ) -> Promise {
         self.assert_token_false();
-        // self.assert_enough_deposit();
         let current_account = env::current_account_id().to_string();
         let subaccount: AccountId = format!("ft.{current_account}").parse().unwrap();
         assert!(
@@ -222,35 +211,34 @@ impl PiparStoreFactory {
         &mut self,
         name: String,
         ipfs: String,
-        price: u128,
-        total_supply: u128,
-        timeout: u8,
+        price: U128,
+        total_supply: U128,
+        timeout: u64,
         is_discount: bool,
-        discount_percent: u8,
-        token_amount: u128,
+        discount_percent: u64,
+        token_amount: U128,
         is_reward: bool,
-        reward_amount: u128,
+        reward_amount: U128,
         custom: bool,
-        user: Option<String>,
-    ) {
-        self.assert_only_owner();
-        let id = env::block_timestamp_ms();
-        self.products.push(&Product {
-            product_id: id,
-            name: name.parse().unwrap(),
-            ipfs: ipfs.parse().unwrap(),
-            price: price,
-            total_supply: total_supply,
-            timeout: timeout,
-            is_discount: is_discount,
-            discount_percent: discount_percent,
-            token_amount: token_amount,
-            is_reward: is_reward,
-            reward_amount: reward_amount,
+        user: String
+    ) -> bool {
+        self.products.push(&Product{
+            product_id: env::block_timestamp_ms(),
+            name,
+            ipfs,
+            price,
+            total_supply,
+            timeout,
+            is_discount,
+            discount_percent,
+            token_amount,
+            is_reward,
+            reward_amount,
             time_created: env::block_timestamp(),
-            custom: custom,
-            user: user,
-        })
+            custom,
+            user
+        });
+        return true
     }
 
     pub fn store_purchase_product(
