@@ -29,15 +29,14 @@ pub struct Product {
     pub product_id: u64,
     pub name: String,
     pub ipfs: String,
-    pub price: U128,
-    pub total_supply: U128,
+    pub price: u128,
+    pub total_supply: u128,
     pub timeout: u64,
     pub is_discount: bool,
     pub discount_percent: u64,
-    pub token_amount: U128,
+    pub token_amount: u128,
     pub is_reward: bool,
-    pub reward_amount: U128,
-    pub time_created: u64,
+    pub reward_amount: u128,
     pub custom: bool,
     pub user: String
 }
@@ -134,7 +133,7 @@ impl PiparStoreFactory {
         products
     }
 
-    pub fn get_token_cost(&self) -> U128 {
+    pub fn get_token_cost(&self) -> u128 {
         self.token_cost.into()
     }
 
@@ -147,7 +146,7 @@ impl PiparStoreFactory {
     pub fn new(owner_id: AccountId, contract_id: AccountId) -> Self {
         assert!(!env::state_exists(), "Already initialized");
         Self {
-            products: Vector::new(b"vec-uid-1".to_vec()),
+            products: Vector::new(b"v".to_vec()),
             owner_id: owner_id,
             contract_id: contract_id,
             token: false,
@@ -211,19 +210,19 @@ impl PiparStoreFactory {
         &mut self,
         name: String,
         ipfs: String,
-        price: U128,
-        total_supply: U128,
+        price: u128,
+        total_supply: u128,
         timeout: u64,
         is_discount: bool,
         discount_percent: u64,
-        token_amount: U128,
+        token_amount: u128,
         is_reward: bool,
-        reward_amount: U128,
+        reward_amount: u128,
         custom: bool,
         user: String
     ) -> bool {
         self.products.push(&Product{
-            product_id: env::block_timestamp_ms(),
+            product_id: env::block_timestamp(),
             name,
             ipfs,
             price,
@@ -234,7 +233,6 @@ impl PiparStoreFactory {
             token_amount,
             is_reward,
             reward_amount,
-            time_created: env::block_timestamp(),
             custom,
             user
         });
@@ -245,8 +243,8 @@ impl PiparStoreFactory {
         &mut self,
         product_id: u64,
         buyer_account_id: AccountId,
-        attached_near: Balance,
-    ) -> Vec<u8> {
+        attached_near: u128,
+    ) -> Option<Product> {
         self.assert_only_pipar();
 
         let product_index = self
@@ -257,16 +255,21 @@ impl PiparStoreFactory {
 
         match self.products.get(product_index as u64) {
             Some(product) => {
-                assert!(
-                    &product.price >= &attached_near,
+                // let price = &product.price;
+                // let p = price.parse().unwrap();
+                assert_eq!(
+                    &product.price,
+                    &attached_near,
                     "Attached attachedNear is not enough to buy the product"
                 );
-                let quantity = attached_near / &product.price;
+                let quantity = &attached_near / &product.price;
+                // let supply = &product.total_supply;
+                // let t = supply.parse().unwrap();
                 assert!(
                     &product.total_supply >= &quantity,
                     "Seller does not have enough product"
                 );
-                let new_supply = &product.total_supply - &quantity;
+                let new_supply: u128 = &product.total_supply - &quantity;
 
                 {
                     self.products.replace(
@@ -283,26 +286,20 @@ impl PiparStoreFactory {
                             token_amount: product.token_amount,
                             is_reward: product.is_reward,
                             reward_amount: product.reward_amount,
-                            time_created: product.time_created,
                             custom: product.custom,
                             user: product.user,
                         },
                     );
                 }
-                println!("{:?}", self.products.get(product_index as u64))
+                let product = self.products.get(product_index as u64);
+
+                return product
             }
             None => panic!("Couldn't find product"),
         }
-        let res = serde_json::to_vec(&PurchaseData {
-            product_id: product_id.clone(),
-            buyer_account_id: buyer_account_id.clone(),
-            attached_near: attached_near.clone(),
-        })
-            .unwrap();
-        res
     }
 
-    pub fn plus_product(&mut self, product_id: u64, quantity: u128) {
+    pub fn plus_product(&mut self, product_id: u64, quantity: u128) -> Option<Product> {
         self.assert_only_pipar();
 
         let product_index = self
@@ -313,7 +310,9 @@ impl PiparStoreFactory {
 
         match self.products.get(product_index as u64) {
             Some(product) => {
-                let new_supply = &product.total_supply + &quantity;
+                // let supply = &product.total_supply;
+                // let t = supply.parse().unwrap();
+                let new_supply: u128 = &product.total_supply + &quantity;
 
                 {
                     self.products.replace(
@@ -330,13 +329,14 @@ impl PiparStoreFactory {
                             token_amount: product.token_amount,
                             is_reward: product.is_reward,
                             reward_amount: product.reward_amount,
-                            time_created: product.time_created,
                             custom: product.custom,
                             user: product.user,
                         },
                     );
                 }
-                println!("{:?}", self.products.get(product_index as u64))
+                let product = self.products.get(product_index as u64);
+
+                return product
             }
             None => panic!("Couldn't find product"),
         }
@@ -358,6 +358,8 @@ impl PiparStoreFactory {
 
         match self.products.get(product_index as u64) {
             Some(product) => {
+                // let supply = &product.reward_amount;
+                // let t = supply.parse().unwrap();
                 let token_quantity = &product.reward_amount * &quantity;
                 let memo = format!("Thank You for Shopping at {}!", env::current_account_id());
                 let current_account = env::current_account_id().to_string();
