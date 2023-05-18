@@ -142,7 +142,6 @@ impl PiparStoreFactory {
     }
 
     #[init]
-    #[private]
     pub fn new(owner_id: AccountId, contract_id: AccountId) -> Self {
         assert!(!env::state_exists(), "Already initialized");
         Self {
@@ -251,16 +250,15 @@ impl PiparStoreFactory {
             .products
             .iter()
             .position(|p| p.product_id == product_id)
-            .unwrap();
+            .unwrap_or_else(|| 11111111);
 
         match self.products.get(product_index as u64) {
             Some(product) => {
                 // let price = &product.price;
                 // let p = price.parse().unwrap();
-                assert_eq!(
-                    &product.price,
-                    &attached_near,
-                    "Attached attachedNear is not enough to buy the product"
+                assert!(
+                    &product.price >= &attached_near,
+                    "Attached Near is not enough to buy the product"
                 );
                 let quantity = &attached_near / &product.price;
                 // let supply = &product.total_supply;
@@ -306,7 +304,7 @@ impl PiparStoreFactory {
             .products
             .iter()
             .position(|p| p.product_id == product_id)
-            .unwrap();
+            .unwrap_or_else(|| 11111111);
 
         match self.products.get(product_index as u64) {
             Some(product) => {
@@ -354,7 +352,7 @@ impl PiparStoreFactory {
             .products
             .iter()
             .position(|p| p.product_id == product_id)
-            .unwrap();
+            .unwrap_or_else(|| 11111111);
 
         match self.products.get(product_index as u64) {
             Some(product) => {
@@ -401,11 +399,15 @@ impl PiparStoreFactory {
     }
 
     #[private]
-    pub fn reward_with_token_callback(&self, token_quantity: u128) {
+    pub fn reward_with_token_callback(&self, token_quantity: u128) -> String {
         if is_promise_success() {
-            println!("Sent {:?} token successfully", token_quantity)
+            let res = format!("Sent {} token successfull!", token_quantity);
+
+            res
         } else {
-            println!("failed sending token")
+            let res = format!("failed sending token");
+
+            res
         }
     }
 }
