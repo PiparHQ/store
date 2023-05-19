@@ -12,7 +12,7 @@ use near_sdk::serde_json::{json};
 
 // Constants
 pub const ONE_NEAR: u128 = 1_000_000_000_000_000_000_000_000;
-pub const TOKEN_BALANCE: u128 = 4_000_000_000_000_000_000_000_000;
+pub const TOKEN_BALANCE: U128 = (ONE_NEAR * 4).into();
 pub const NO_DEPOSIT: Balance = 0;
 pub const ONE_YOCTO: u128 = 10_000_000_000_000_000_000_000;
 
@@ -26,17 +26,17 @@ pub const CREATE_ACCOUNT: Gas = tgas(65 + 5);
 #[derive(PanicOnDefault, BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, Debug)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Product {
-    pub product_id: u64,
+    pub product_id: U128,
     pub name: String,
     pub ipfs: String,
-    pub price: u128,
-    pub total_supply: u128,
-    pub timeout: u64,
+    pub price: U128,
+    pub total_supply: U128,
+    pub timeout: U128,
     pub is_discount: bool,
-    pub discount_percent: u64,
-    pub token_amount: u128,
+    pub discount_percent: U128,
+    pub token_amount: U128,
     pub is_reward: bool,
-    pub reward_amount: u128,
+    pub reward_amount: U128,
     pub custom: bool,
     pub user: String
 }
@@ -46,7 +46,7 @@ pub struct Product {
 #[serde(crate = "near_sdk::serde")]
 pub struct FtData {
     owner_id: AccountId,
-    total_supply: String,
+    total_supply: U128,
     name: String,
     symbol: String,
     icon: String,
@@ -65,7 +65,7 @@ pub struct StorageData {
 #[serde(crate = "near_sdk::serde")]
 pub struct TokenData {
     receiver_id: AccountId,
-    amount: u128,
+    amount: U128,
     memo: String,
 }
 
@@ -73,7 +73,7 @@ pub struct TokenData {
 #[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct PurchaseData {
-    product_id: u64,
+    product_id: U128,
     buyer_account_id: AccountId,
     attached_near: Balance,
 }
@@ -85,7 +85,7 @@ pub struct PiparStoreFactory {
     pub owner_id: AccountId,
     pub contract_id: AccountId,
     pub token: bool,
-    pub token_cost: u128,
+    pub token_cost: U128,
 }
 
 #[near_bindgen]
@@ -111,7 +111,7 @@ impl PiparStoreFactory {
     fn assert_enough_deposit(&self) {
         assert_one_yocto();
         assert!(
-            env::attached_deposit() >= TOKEN_BALANCE,
+            env::attached_deposit() >= TOKEN_BALANCE.into(),
             "Please attach enough token balance"
         )
     }
@@ -146,8 +146,8 @@ impl PiparStoreFactory {
         assert!(!env::state_exists(), "Already initialized");
         Self {
             products: Vector::new(b"v".to_vec()),
-            owner_id: owner_id,
-            contract_id: contract_id,
+            owner_id,
+            contract_id,
             token: false,
             token_cost: TOKEN_BALANCE,
         }
@@ -167,7 +167,7 @@ impl PiparStoreFactory {
     #[payable]
     pub fn deploy_token(
         &mut self,
-        total_supply: String,
+        total_supply: U128,
         name: String,
         symbol: String,
         icon: String,
@@ -181,17 +181,17 @@ impl PiparStoreFactory {
         );
         let init_args = serde_json::to_vec(&FtData {
             owner_id: subaccount.clone(),
-            total_supply: total_supply,
-            name: name,
-            symbol: symbol,
-            icon: icon,
+            total_supply,
+            name,
+            symbol,
+            icon,
         })
         .unwrap();
 
         Promise::new(subaccount.clone())
             .create_account()
             .add_full_access_key(env::signer_account_pk())
-            .transfer(TOKEN_BALANCE)
+            .transfer(TOKEN_BALANCE.into())
             .deploy_contract(include_bytes!("../wasm/pipar_fungible_token.wasm").to_vec())
             .function_call(
                 "new_default_meta".to_owned(),
@@ -201,7 +201,7 @@ impl PiparStoreFactory {
             )
             .then(Self::ext(env::current_account_id()).deploy_token_callback(
                 env::predecessor_account_id(),
-                env::attached_deposit().into(),
+                env::attached_deposit(),
             ))
     }
 
@@ -209,19 +209,19 @@ impl PiparStoreFactory {
         &mut self,
         name: String,
         ipfs: String,
-        price: u128,
-        total_supply: u128,
-        timeout: u64,
+        price: U128,
+        total_supply: U128,
+        timeout: U128,
         is_discount: bool,
-        discount_percent: u64,
-        token_amount: u128,
+        discount_percent: U128,
+        token_amount: U128,
         is_reward: bool,
-        reward_amount: u128,
+        reward_amount: U128,
         custom: bool,
         user: String
     ) -> bool {
         self.products.push(&Product{
-            product_id: env::block_timestamp(),
+            product_id: env::block_timestamp().into(),
             name,
             ipfs,
             price,
@@ -240,9 +240,10 @@ impl PiparStoreFactory {
 
     pub fn store_purchase_product(
         &mut self,
-        product_id: u64,
+        product_id: U128,
+        product_quantity: U128,
         buyer_account_id: AccountId,
-        attached_near: u128,
+        attached_near: U128,
     ) -> Option<Product> {
         self.assert_only_pipar();
 
@@ -254,20 +255,26 @@ impl PiparStoreFactory {
 
         match self.products.get(product_index as u64) {
             Some(product) => {
-                // let price = &product.price;
-                // let p = price.parse().unwrap();
+                let price = product.price.clone();
+                let p: u128 = price.into();
+                let a: u128 = attached_near.into();
                 assert!(
-                    &product.price >= &attached_near,
+                    p >= a,
                     "Attached Near is not enough to buy the product"
                 );
-                let quantity = &attached_near / &product.price;
-                // let supply = &product.total_supply;
-                // let t = supply.parse().unwrap();
+                let quantity: u128 = a / p;
+                let p_quantity: u128 = product_quantity.into();
                 assert!(
-                    &product.total_supply >= &quantity,
+                    &quantity >= &p_quantity,
+                    "Error in quantity ordering"
+                );
+                let supply = &product.total_supply;
+                let t: u128 = supply.into();
+                assert!(
+                    &t >= &p_quantity,
                     "Seller does not have enough product"
                 );
-                let new_supply: u128 = &product.total_supply - &quantity;
+                let new_supply: u128 = &t - &p_quantity;
 
                 {
                     self.products.replace(
@@ -277,7 +284,7 @@ impl PiparStoreFactory {
                             name: product.name,
                             ipfs: product.ipfs,
                             price: product.price,
-                            total_supply: new_supply,
+                            total_supply: new_supply.into(),
                             timeout: product.timeout,
                             is_discount: product.is_discount,
                             discount_percent: product.discount_percent,
@@ -297,7 +304,7 @@ impl PiparStoreFactory {
         }
     }
 
-    pub fn plus_product(&mut self, product_id: u64, quantity: u128) -> Option<Product> {
+    pub fn plus_product(&mut self, product_id: U128, quantity: U128) -> Option<Product> {
         self.assert_only_pipar();
 
         let product_index = self
@@ -308,9 +315,10 @@ impl PiparStoreFactory {
 
         match self.products.get(product_index as u64) {
             Some(product) => {
-                // let supply = &product.total_supply;
-                // let t = supply.parse().unwrap();
-                let new_supply: u128 = &product.total_supply + &quantity;
+                let supply = &product.total_supply;
+                let t: u128 = supply.into();
+                let p_quantity: u128 = quantity.into();
+                let new_supply: u128 = &t + &p_quantity;
 
                 {
                     self.products.replace(
@@ -320,7 +328,7 @@ impl PiparStoreFactory {
                             name: product.name,
                             ipfs: product.ipfs,
                             price: product.price,
-                            total_supply: new_supply,
+                            total_supply: new_supply.into(),
                             timeout: product.timeout,
                             is_discount: product.is_discount,
                             discount_percent: product.discount_percent,
@@ -342,8 +350,8 @@ impl PiparStoreFactory {
 
     pub fn reward_with_token(
         &mut self,
-        product_id: u64,
-        quantity: u128,
+        product_id: U128,
+        quantity: U128,
         buyer_account_id: AccountId,
     ) -> Promise {
         self.assert_only_pipar();
@@ -356,9 +364,10 @@ impl PiparStoreFactory {
 
         match self.products.get(product_index as u64) {
             Some(product) => {
-                // let supply = &product.reward_amount;
-                // let t = supply.parse().unwrap();
-                let token_quantity = &product.reward_amount * &quantity;
+                let reward = &product.reward_amount;
+                let t: u128 = reward.into();
+                let q: u128 = quantity.into();
+                let token_quantity = &t * &q;
                 let memo = format!("Thank You for Shopping at {}!", env::current_account_id());
                 let current_account = env::current_account_id().to_string();
                 let token_account: AccountId = format!("ft.{current_account}").parse().unwrap();
@@ -371,8 +380,8 @@ impl PiparStoreFactory {
 
                 let token_args = serde_json::to_vec(&TokenData {
                     receiver_id: buyer_account_id.clone(),
-                    amount: token_quantity,
-                    memo: memo,
+                    amount: token_quantity.into(),
+                    memo,
                 })
                 .unwrap();
 
@@ -401,7 +410,7 @@ impl PiparStoreFactory {
     #[private]
     pub fn reward_with_token_callback(&self, token_quantity: u128) -> String {
         if is_promise_success() {
-            let res = format!("Sent {} token successfull!", token_quantity);
+            let res = format!("Sent {} token successfully!", token_quantity);
 
             res
         } else {
