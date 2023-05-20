@@ -12,7 +12,7 @@ use near_sdk::serde_json::{json};
 
 // Constants
 pub const ONE_NEAR: u128 = 1_000_000_000_000_000_000_000_000;
-pub const TOKEN_BALANCE: U128 = (ONE_NEAR * 4).into();
+pub const TOKEN_BALANCE: u128 = 4_000_000_000_000_000_000_000_000;
 pub const NO_DEPOSIT: Balance = 0;
 pub const ONE_YOCTO: u128 = 10_000_000_000_000_000_000_000;
 
@@ -110,8 +110,9 @@ impl PiparStoreFactory {
 
     fn assert_enough_deposit(&self) {
         assert_one_yocto();
+        let token: u128 = TOKEN_BALANCE.into();
         assert!(
-            env::attached_deposit() >= TOKEN_BALANCE.into(),
+            env::attached_deposit() >= token,
             "Please attach enough token balance"
         )
     }
@@ -149,7 +150,7 @@ impl PiparStoreFactory {
             owner_id,
             contract_id,
             token: false,
-            token_cost: TOKEN_BALANCE,
+            token_cost: U128::from(TOKEN_BALANCE),
         }
     }
 
@@ -201,7 +202,7 @@ impl PiparStoreFactory {
             )
             .then(Self::ext(env::current_account_id()).deploy_token_callback(
                 env::predecessor_account_id(),
-                env::attached_deposit(),
+                env::attached_deposit().into(),
             ))
     }
 
@@ -221,7 +222,7 @@ impl PiparStoreFactory {
         user: String
     ) -> bool {
         self.products.push(&Product{
-            product_id: env::block_timestamp().into(),
+            product_id: U128::from(env::block_timestamp() as u128),
             name,
             ipfs,
             price,
@@ -268,7 +269,7 @@ impl PiparStoreFactory {
                     &quantity >= &p_quantity,
                     "Error in quantity ordering"
                 );
-                let supply = &product.total_supply;
+                let supply = product.total_supply.clone();
                 let t: u128 = supply.into();
                 assert!(
                     &t >= &p_quantity,
@@ -315,7 +316,7 @@ impl PiparStoreFactory {
 
         match self.products.get(product_index as u64) {
             Some(product) => {
-                let supply = &product.total_supply;
+                let supply = product.total_supply.clone();
                 let t: u128 = supply.into();
                 let p_quantity: u128 = quantity.into();
                 let new_supply: u128 = &t + &p_quantity;
@@ -364,7 +365,7 @@ impl PiparStoreFactory {
 
         match self.products.get(product_index as u64) {
             Some(product) => {
-                let reward = &product.reward_amount;
+                let reward = product.reward_amount.clone();
                 let t: u128 = reward.into();
                 let q: u128 = quantity.into();
                 let token_quantity = &t * &q;
