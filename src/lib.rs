@@ -91,7 +91,6 @@ pub struct PiparStoreFactory {
 #[near_bindgen]
 impl PiparStoreFactory {
     fn assert_only_owner(&self) {
-        assert_one_yocto();
         assert_eq!(
             env::signer_account_id(),
             self.owner_id,
@@ -100,7 +99,6 @@ impl PiparStoreFactory {
     }
 
     fn assert_only_pipar(&self) {
-        assert_one_yocto();
         assert_eq!(
             env::predecessor_account_id(),
             self.contract_id,
@@ -260,7 +258,7 @@ impl PiparStoreFactory {
                 let p: u128 = price.into();
                 let a: u128 = attached_near.into();
                 assert!(
-                    p >= a,
+                    a >= p,
                     "Attached Near is not enough to buy the product"
                 );
                 let quantity: u128 = a / p;
@@ -341,7 +339,7 @@ impl PiparStoreFactory {
                         },
                     );
                 }
-                let product = self.products.get(product_index as u64);
+                let product = self.products.get(product_index.clone() as u64);
 
                 return product
             }
@@ -369,7 +367,7 @@ impl PiparStoreFactory {
                 let t: u128 = reward.into();
                 let q: u128 = quantity.into();
                 let token_quantity = &t * &q;
-                let memo = format!("Thank You for Shopping at {}!", env::current_account_id());
+                let memo = format!("Thank You for Shopping at {:?}!", env::current_account_id());
                 let current_account = env::current_account_id().to_string();
                 let token_account: AccountId = format!("ft.{current_account}").parse().unwrap();
 
@@ -411,7 +409,7 @@ impl PiparStoreFactory {
     #[private]
     pub fn reward_with_token_callback(&self, token_quantity: u128) -> String {
         if is_promise_success() {
-            let res = format!("Sent {} token successfully!", token_quantity);
+            let res = format!("Sent {:?} token successfully!", token_quantity);
 
             res
         } else {
