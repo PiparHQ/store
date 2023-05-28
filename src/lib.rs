@@ -20,7 +20,7 @@ pub const fn tgas(n: u64) -> Gas {
     Gas(n * 10u64.pow(12))
 }
 
-pub const CREATE_ACCOUNT: Gas = tgas(65 + 5);
+pub const CREATE_ACCOUNT: Gas = tgas(35 + 5);
 
 #[near_bindgen]
 #[derive(PanicOnDefault, BorshDeserialize, BorshSerialize, Deserialize, Serialize, Clone, Debug)]
@@ -122,6 +122,14 @@ impl PiparStoreFactory {
         )
     }
 
+    pub fn assert_store_owner(&self) -> bool {
+        return if env::signer_account_id() == self.owner_id {
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn get_product_count(&self) -> usize {
         self.products.iter().count()
     }
@@ -172,6 +180,7 @@ impl PiparStoreFactory {
         icon: String,
     ) -> Promise {
         self.assert_token_false();
+        self.assert_only_owner();
         let current_account = env::current_account_id().to_string();
         let subaccount: AccountId = format!("ft.{current_account}").parse().unwrap();
         assert!(
@@ -219,6 +228,7 @@ impl PiparStoreFactory {
         custom: bool,
         user: String
     ) -> bool {
+        self.assert_only_owner();
         self.products.push(&Product{
             product_id: U128::from(env::block_timestamp() as u128),
             name,
@@ -363,6 +373,10 @@ impl PiparStoreFactory {
 
         match self.products.get(product_index as u64) {
             Some(product) => {
+                assert!(
+                    &product.is_reward,
+                    "Product cannot be rewarded with tokens"
+                );
                 let reward = product.reward_amount.clone();
                 let t: u128 = reward.into();
                 let q: u128 = quantity.into();
@@ -409,7 +423,7 @@ impl PiparStoreFactory {
     #[private]
     pub fn reward_with_token_callback(&self, token_quantity: u128) -> String {
         if is_promise_success() {
-            let res = format!("Sent {:?} token successfully!", token_quantity);
+            let res = format!("Sent {token_quantity} token successfully!");
 
             res
         } else {
