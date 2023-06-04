@@ -164,6 +164,7 @@ impl PiparStoreFactory {
     pub fn deploy_token_callback(&mut self, token_creator_id: AccountId, attached_deposit: U128) {
         let attached_deposit: u128 = attached_deposit.into();
         if is_promise_success() {
+            self.token = true;
             env::log_str("Successful token deployment")
         } else {
             Promise::new(token_creator_id).transfer(attached_deposit);
@@ -188,7 +189,7 @@ impl PiparStoreFactory {
             "Invalid subaccount"
         );
         let init_args = serde_json::to_vec(&FtData {
-            owner_id: subaccount.clone(),
+            owner_id: env::current_account_id(),
             total_supply,
             name,
             symbol,
