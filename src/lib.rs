@@ -140,6 +140,10 @@ impl PiparStoreFactory {
         products
     }
 
+    pub fn get_store_owner(&self) -> AccountId {
+        self.owner_id.clone()
+    }
+
     pub fn get_token_cost(&self) -> u128 {
         self.token_cost.into()
     }
