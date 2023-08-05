@@ -1,2 +1,2 @@
-Pipar Store Smart Contract
+Pipar Store Smart Contract (archived)
 ============================
